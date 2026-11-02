@@ -1,0 +1,244 @@
+{
+  "menu": [
+    {
+      "Sheet": "beach-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "victory": [
+    {
+      "Sheet": "beach-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "boss": [
+    {
+      "Sheet": "boss-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "hero.idle": [
+    {
+      "Sheet": "details.png",
+      "X": 431,
+      "Y": 269,
+      "Width": 47,
+      "Height": 48,
+      "Transparent": true
+    }
+  ],
+  "hero.walk": [
+    {
+      "Sheet": "details.png",
+      "X": 76,
+      "Y": 177,
+      "Width": 44,
+      "Height": 63,
+      "Transparent": true
+    }
+  ],
+  "hero.hurt": [
+    {
+      "Sheet": "details.png",
+      "X": 433,
+      "Y": 199,
+      "Width": 53,
+      "Height": 55,
+      "Transparent": true
+    }
+  ],
+  "hero.dead": [
+    {
+      "Sheet": "details.png",
+      "X": 620,
+      "Y": 211,
+      "Width": 74,
+      "Height": 42,
+      "Transparent": true
+    }
+  ],
+  "splash": [
+    {
+      "Sheet": "campaign.png",
+      "X": 1294,
+      "Y": 661,
+      "Width": 56,
+      "Height": 75,
+      "Transparent": true
+    }
+  ],
+  "deck": [
+    {
+      "Sheet": "campaign.png",
+      "X": 674,
+      "Y": 319,
+      "Width": 52,
+      "Height": 28,
+      "Transparent": false
+    }
+  ],
+  "scene.0": [
+    {
+      "Sheet": "beach-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "scene.1": [
+    {
+      "Sheet": "rocks-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "scene.2": [
+    {
+      "Sheet": "boss-clean-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "enemy.0": [
+    {
+      "Sheet": "campaign.png",
+      "X": 13,
+      "Y": 780,
+      "Width": 65,
+      "Height": 63,
+      "Transparent": true
+    }
+  ],
+  "enemy.1": [
+    {
+      "Sheet": "campaign.png",
+      "X": 898,
+      "Y": 773,
+      "Width": 96,
+      "Height": 71,
+      "Transparent": true
+    }
+  ],
+  "enemy.2": [
+    {
+      "Sheet": "campaign.png",
+      "X": 688,
+      "Y": 887,
+      "Width": 70,
+      "Height": 115,
+      "Transparent": true
+    }
+  ],
+  "enemy.0.idle": [
+    {
+      "Sheet": "campaign.png",
+      "X": 13,
+      "Y": 780,
+      "Width": 65,
+      "Height": 63,
+      "Transparent": true
+    },
+    {
+      "Sheet": "campaign.png",
+      "X": 86,
+      "Y": 780,
+      "Width": 65,
+      "Height": 63,
+      "Transparent": true
+    }
+  ],
+  "enemy.0.attack": [
+    {
+      "Sheet": "campaign.png",
+      "X": 86,
+      "Y": 780,
+      "Width": 65,
+      "Height": 63,
+      "Transparent": true
+    },
+    {
+      "Sheet": "campaign.png",
+      "X": 149,
+      "Y": 780,
+      "Width": 62,
+      "Height": 63,
+      "Transparent": true
+    }
+  ],
+  "enemy.1.idle": [
+    {
+      "Sheet": "campaign.png",
+      "X": 898,
+      "Y": 773,
+      "Width": 96,
+      "Height": 71,
+      "Transparent": true
+    },
+    {
+      "Sheet": "campaign.png",
+      "X": 1000,
+      "Y": 773,
+      "Width": 95,
+      "Height": 71,
+      "Transparent": true
+    }
+  ],
+  "enemy.1.attack": [
+    {
+      "Sheet": "campaign.png",
+      "X": 1000,
+      "Y": 773,
+      "Width": 95,
+      "Height": 71,
+      "Transparent": true
+    },
+    {
+      "Sheet": "campaign.png",
+      "X": 1096,
+      "Y": 773,
+      "Width": 78,
+      "Height": 71,
+      "Transparent": true
+    }
+  ],
+  "enemy.2.idle": [
+    {
+      "Sheet": "leviathan-sprite.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1774,
+      "Height": 887,
+      "Transparent": false
+    }
+  ],
+  "enemy.2.attack": [
+    {
+      "Sheet": "leviathan-sprite.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1774,
+      "Height": 887,
+      "Transparent": false
+    }
+  ]
+}
