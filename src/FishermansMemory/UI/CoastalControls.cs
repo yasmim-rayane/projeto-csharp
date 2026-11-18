@@ -487,19 +487,21 @@ namespace FishermansMemory.UI
         private void LayoutInnerBox()
         {
             if (InnerTextBox == null) return;
-            bool compact = Height < 66;
-            InnerTextBox.Font = CoastalTheme.BodyFont(compact ? 10.5f : 12f, FontStyle.Bold);
-            int topY = compact ? 28 : 35;
+            bool ultraCompact = Height < 56;
+            bool compact = Height < 68;
+            InnerTextBox.Font = CoastalTheme.BodyFont(ultraCompact ? 9.5f : compact ? 10.5f : 12f, FontStyle.Bold);
+            int topY = ultraCompact ? 22 : compact ? 28 : 35;
             int boxH = InnerTextBox.PreferredHeight;
-            int slotY = topY + Math.Max(2, (Height - topY - 6 - boxH) / 2);
-            InnerTextBox.SetBounds(16, slotY, Math.Max(60, Width - 125), boxH);
+            int slotY = topY + Math.Max(1, (Height - topY - (ultraCompact ? 4 : 6) - boxH) / 2);
+            InnerTextBox.SetBounds(14, slotY, Math.Max(60, Width - 110), boxH);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             bool focused = InnerTextBox.Focused;
-            bool compact = Height < 66;
+            bool ultraCompact = Height < 56;
+            bool compact = Height < 68;
 
             Color cardBorder = focused ? CoastalTheme.BrassGold :
                 ValidationState == false ? CoastalTheme.DangerCoral :
@@ -510,21 +512,21 @@ namespace FishermansMemory.UI
                 focused ? (Color?)CoastalTheme.BrassBright : null);
 
             // Badge "PISTA #1"
-            Rectangle numBadge = new Rectangle(8, 6, 74, compact ? 18 : 22);
+            Rectangle numBadge = new Rectangle(8, ultraCompact ? 3 : 6, ultraCompact ? 62 : 74, ultraCompact ? 16 : compact ? 18 : 22);
             CoastalTheme.DrawSubCard(g, numBadge, CoastalTheme.WoodBase, CoastalTheme.WoodOutline);
-            var badgeFont = CoastalTheme.TitleFont(compact ? 8f : 9f, FontStyle.Bold);
+            var badgeFont = CoastalTheme.TitleFont(ultraCompact ? 7.5f : compact ? 8f : 9f, FontStyle.Bold);
             TextRenderer.DrawText(g, "PISTA #" + (QuestionIndex + 1), badgeFont, numBadge, CoastalTheme.BrassBright,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
             // Question text
-            var qFont = CoastalTheme.BodyFont(compact ? 9.5f : 11f, FontStyle.Bold);
-            Rectangle qRect = new Rectangle(88, 4, Math.Max(40, Width - 96), compact ? 22 : 26);
+            var qFont = CoastalTheme.BodyFont(ultraCompact ? 8.5f : compact ? 9.5f : 11f, FontStyle.Bold);
+            Rectangle qRect = new Rectangle(numBadge.Right + 8, ultraCompact ? 2 : 4, Math.Max(40, Width - numBadge.Right - 14), ultraCompact ? 18 : compact ? 22 : 26);
             TextRenderer.DrawText(g, QuestionText, qFont, qRect, CoastalTheme.InkDark,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
             // Input slot frame around InnerTextBox
-            int slotTop = compact ? 26 : 32;
-            Rectangle inputSlot = new Rectangle(8, slotTop, Math.Max(80, Width - 16), Height - slotTop - 6);
+            int slotTop = ultraCompact ? 21 : compact ? 26 : 32;
+            Rectangle inputSlot = new Rectangle(8, slotTop, Math.Max(80, Width - 16), Math.Max(18, Height - slotTop - (ultraCompact ? 3 : 6)));
             Color slotBorder = focused ? CoastalTheme.WoodBase :
                 ValidationState == false ? CoastalTheme.DangerCoral :
                 ValidationState == true ? CoastalTheme.SafeGreenDark : CoastalTheme.ParchmentBorder;
@@ -541,7 +543,7 @@ namespace FishermansMemory.UI
             {
                 string statusLabel = ValidationState == false ? "✕ REVISAR" : "✓ OK";
                 Color statusColor = ValidationState == false ? CoastalTheme.DangerDark : CoastalTheme.SafeGreenDark;
-                Rectangle statusRect = new Rectangle(inputSlot.Right - 92, inputSlot.Y + 2, 88, inputSlot.Height - 4);
+                Rectangle statusRect = new Rectangle(inputSlot.Right - 92, inputSlot.Y + 1, 88, inputSlot.Height - 2);
                 var stFont = CoastalTheme.TitleFont(7.5f, FontStyle.Bold);
                 TextRenderer.DrawText(g, statusLabel, stFont, statusRect, statusColor,
                     TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
@@ -553,6 +555,8 @@ namespace FishermansMemory.UI
     public sealed class SequenceBoardControl : Control
     {
         private IReadOnlyList<Lane> pattern = new Lane[0];
+        private bool includeCenter = true;
+        private int attackNumberOffset;
 
         public SequenceBoardControl()
         {
@@ -561,9 +565,11 @@ namespace FishermansMemory.UI
             BackColor = CoastalTheme.OceanDeep;
         }
 
-        public void SetPattern(IReadOnlyList<Lane> sequence)
+        public void SetPattern(IReadOnlyList<Lane> sequence, bool allowCenter = true, int numberOffset = 0)
         {
             pattern = sequence ?? new Lane[0];
+            includeCenter = allowCenter;
+            attackNumberOffset = Math.Max(0, numberOffset);
             Invalidate();
         }
 
@@ -587,7 +593,7 @@ namespace FishermansMemory.UI
             int cardW = availW / cols;
             int cardH = availH / rows;
 
-            bool compact = cardH < 78 || cardW < 82;
+            bool compact = cardH < 78 || cardW < 105;
 
             for (int i = 0; i < count; i++)
             {
@@ -600,33 +606,36 @@ namespace FishermansMemory.UI
                 Lane lane = pattern[i];
                 CoastalTheme.DrawSubCard(g, card, CoastalTheme.OceanDeep, CoastalTheme.WoodBase, CoastalTheme.BrassGold);
 
-                // Top order ribbon: "1º ATAQUE"
+                // Top order ribbon indicating dodge sequence number
                 int headerH = compact ? 18 : 22;
                 Rectangle topRibbon = new Rectangle(card.X + 2, card.Y + 2, card.Width - 4, headerH);
                 using (var ribBrush = new SolidBrush(CoastalTheme.WoodBase))
                     g.FillRectangle(ribBrush, topRibbon);
 
-                var ordFont = CoastalTheme.TitleFont(compact ? 8f : 9f, FontStyle.Bold);
-                TextRenderer.DrawText(g, (i + 1) + "º GOLPE", ordFont, topRibbon, CoastalTheme.BrassBright,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                int atkNum = attackNumberOffset + i + 1;
+                string topText = cardW >= 122 ? (atkNum + "º ATAQUE • FUGA") : (atkNum + "º FUGA");
+                var ordFont = CoastalTheme.TitleFont(compact ? 7.5f : 8.5f, FontStyle.Bold);
+                TextRenderer.DrawText(g, topText, ordFont, topRibbon, CoastalTheme.BrassBright,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
-                // Bottom direction label: "CIMA", "ESQUERDA", etc. in calm ocean tone
+                // Bottom direction label clearly indicating safe position
                 int footH = compact ? 16 : 20;
                 Rectangle botBand = new Rectangle(card.X + 2, card.Bottom - footH - 2, card.Width - 4, footH);
                 using (var botBrush = new SolidBrush(CoastalTheme.OceanMid))
                     g.FillRectangle(botBrush, botBand);
 
-                var dirFont = CoastalTheme.TitleFont(compact ? 7.5f : 8.5f, FontStyle.Bold);
-                TextRenderer.DrawText(g, CoastalTheme.LaneName(lane), dirFont, botBand, CoastalTheme.SandLight,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                string botText = cardW >= 128 ? ("SEGURA: " + CoastalTheme.LaneName(lane)) : CoastalTheme.LaneName(lane);
+                var dirFont = CoastalTheme.TitleFont(compact ? 7f : 8f, FontStyle.Bold);
+                TextRenderer.DrawText(g, botText, dirFont, botBand, CoastalTheme.SafeGreenBright,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
-                // Middle area: Key symbol + mini spatial cross
+                // Middle area: Key symbol + mini spatial track
                 Rectangle mid = new Rectangle(card.X + 4, topRibbon.Bottom + 2, card.Width - 8, Math.Max(16, botBand.Top - topRibbon.Bottom - 4));
                 if (mid.Width >= 90 && mid.Height >= 28)
                 {
                     int crossW = Math.Min(mid.Height + 6, mid.Width * 42 / 100);
                     Rectangle crossRect = new Rectangle(mid.X + 2, mid.Y + 2, crossW, mid.Height - 4);
-                    CoastalTheme.DrawLaneCrossMini(g, crossRect, lane, CoastalTheme.SafeGreen, Color.FromArgb(90, 120, 145));
+                    CoastalTheme.DrawLaneCrossMini(g, crossRect, lane, CoastalTheme.SafeGreen, Color.FromArgb(90, 120, 145), includeCenter);
 
                     Rectangle keyRect = new Rectangle(crossRect.Right + 2, mid.Y, mid.Right - crossRect.Right - 2, mid.Height);
                     var keyFont = CoastalTheme.TitleFont(compact ? 12f : 15f, FontStyle.Bold);
@@ -643,7 +652,7 @@ namespace FishermansMemory.UI
         }
     }
 
-    // Visual route chart for Phase.Map showing Completed, Next, and Locked regions
+    // Visual route chart for Phase.Map showing Completed, Next, and Locked regions across 6 stages (2x3 grid)
     public sealed class RouteMapCanvas : Control
     {
         private int completedLevelIndex;
@@ -670,19 +679,34 @@ namespace FishermansMemory.UI
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             int count = Levels.All.Count;
-            int pad = 12;
-            int gap = 14;
-            int cardW = Math.Max(80, (Width - pad * 2 - gap * (count - 1)) / count);
-            int cardH = Math.Max(80, Height - pad * 2);
+            int cols = 3;
+            int rows = (count + cols - 1) / cols;
+            int pad = 10;
+            int gapX = 12;
+            int gapY = 14;
+            int cardW = Math.Max(80, (Width - pad * 2 - gapX * (cols - 1)) / cols);
+            int cardH = Math.Max(70, (Height - pad * 2 - gapY * (rows - 1)) / rows);
 
-            // Draw connecting sea route line across the middle of the cards
-            int routeY = Height / 2;
-            using (var routePen = new Pen(CoastalTheme.WoodBase, 3f) { DashStyle = DashStyle.Dash })
+            // Draw connecting sea route lines across row 1, down to row 2, and across row 2
+            int row1Y = pad + cardH / 2;
+            int row2Y = pad + cardH + gapY + cardH / 2;
+            int col0X = pad + cardW / 2;
+            int col2X = pad + (cols - 1) * (cardW + gapX) + cardW / 2;
+            int midGapY = pad + cardH + gapY / 2;
+
+            using (var routePen = new Pen(CoastalTheme.WoodBase, 2.5f) { DashStyle = DashStyle.Dash })
             {
-                g.DrawLine(routePen, pad + cardW / 2, routeY, Width - pad - cardW / 2, routeY);
+                g.DrawLine(routePen, col0X, row1Y, col2X, row1Y);
+                if (rows > 1)
+                {
+                    g.DrawLine(routePen, col2X, row1Y, col2X, midGapY);
+                    g.DrawLine(routePen, col2X, midGapY, col0X, midGapY);
+                    g.DrawLine(routePen, col0X, midGapY, col0X, row2Y);
+                    g.DrawLine(routePen, col0X, row2Y, col2X, row2Y);
+                }
             }
 
-            bool compact = cardH < 140 || cardW < 155;
+            bool compact = cardH < 126 || cardW < 175;
 
             for (int i = 0; i < count; i++)
             {
@@ -691,7 +715,9 @@ namespace FishermansMemory.UI
                 bool isNext = i == completedLevelIndex + 1;
                 bool isLocked = i > completedLevelIndex + 1;
 
-                Rectangle card = new Rectangle(pad + i * (cardW + gap), pad, cardW, cardH);
+                int row = i / cols;
+                int col = i % cols;
+                Rectangle card = new Rectangle(pad + col * (cardW + gapX), pad + row * (cardH + gapY), cardW, cardH);
 
                 Color bg = isCompleted ? Color.FromArgb(228, 242, 228) :
                            isNext ? Color.FromArgb(255, 244, 212) :
@@ -704,7 +730,7 @@ namespace FishermansMemory.UI
                 CoastalTheme.DrawSubCard(g, card, bg, border, hi);
 
                 // Top status banner
-                int statusH = compact ? 22 : 28;
+                int statusH = compact ? 18 : 24;
                 Rectangle statusBand = new Rectangle(card.X + 2, card.Y + 2, card.Width - 4, statusH);
                 Color statusBg = isCompleted ? CoastalTheme.SafeGreenDark :
                                  isNext ? CoastalTheme.WoodBase :
@@ -713,37 +739,40 @@ namespace FishermansMemory.UI
                                  isNext ? CoastalTheme.BrassBright :
                                  Color.FromArgb(220, 214, 204);
                 string statusText = isCompleted ? "✓ CONCLUÍDA" :
-                                    isNext ? "→ PRÓXIMA REGIÃO" :
+                                    isNext ? "→ PRÓXIMA" :
                                     "🔒 BLOQUEADA";
 
                 using (var sbBrush = new SolidBrush(statusBg))
                     g.FillRectangle(sbBrush, statusBand);
 
-                var stFont = CoastalTheme.TitleFont(compact ? 8f : 9.5f, FontStyle.Bold);
+                var stFont = CoastalTheme.TitleFont(compact ? 7.5f : 8.5f, FontStyle.Bold);
                 TextRenderer.DrawText(g, statusText, stFont, statusBand, statusFg,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
-                // Center emblem icon
-                int iconSz = compact ? 28 : 42;
-                RectangleF iconRect = new RectangleF(card.X + (card.Width - iconSz) / 2f, statusBand.Bottom + (compact ? 6 : 12), iconSz, iconSz);
+                // Emblem icon
+                int iconSz = compact ? 20 : 28;
+                RectangleF iconRect = new RectangleF(card.X + (card.Width - iconSz) / 2f, statusBand.Bottom + (compact ? 4 : 6), iconSz, iconSz);
                 NauticalIcon nodeIcon = isCompleted ? NauticalIcon.ShieldCheck :
                                         isNext ? (lvl.Boss ? NauticalIcon.WaveSkull : NauticalIcon.Compass) :
                                         NauticalIcon.Lock;
                 CoastalTheme.DrawNauticalIcon(g, nodeIcon, iconRect, statusBg, isNext ? CoastalTheme.BrassGold : border);
 
                 // Region Number & Title
-                int textTop = (int)iconRect.Bottom + (compact ? 4 : 8);
-                var titleFont = CoastalTheme.TitleFont(compact ? 9.5f : 11.5f, FontStyle.Bold);
-                string regTitle = (lvl.Boss ? "BOSS: " : (i + 1) + ". ") + lvl.Name;
-                Rectangle titleRect = new Rectangle(card.X + 6, textTop, card.Width - 12, compact ? 32 : 38);
+                int textTop = (int)iconRect.Bottom + (compact ? 2 : 4);
+                var titleFont = CoastalTheme.TitleFont(compact ? 8.5f : 10f, FontStyle.Bold);
+                string regTitle = (lvl.Boss ? "6. BOSS: " : (i + 1) + ". ") + lvl.Name;
+                Rectangle titleRect = new Rectangle(card.X + 4, textTop, card.Width - 8, compact ? 26 : 32);
                 TextRenderer.DrawText(g, regTitle, titleFont, titleRect,
                     isLocked ? CoastalTheme.InkMuted : CoastalTheme.InkDark,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
 
                 // Region details (Enemy & attacks)
-                var detailFont = CoastalTheme.BodyFont(compact ? 8f : 9.5f, FontStyle.Regular);
-                string details = lvl.Enemy + "\n" + lvl.Attacks + " ataques • " + lvl.Facts.Length + (lvl.Facts.Length == 1 ? " pista" : " pistas");
-                Rectangle detRect = new Rectangle(card.X + 6, titleRect.Bottom, card.Width - 12, Math.Max(20, card.Bottom - titleRect.Bottom - 4));
+                var detailFont = CoastalTheme.BodyFont(compact ? 7.5f : 8.5f, FontStyle.Regular);
+                string atkPart = lvl.Boss
+                    ? (lvl.Attacks + " ataques (" + lvl.SequenceCount + "×" + lvl.SequenceLength + ")")
+                    : (lvl.Attacks + " ataques");
+                string details = lvl.Enemy + "\n" + atkPart + " • " + lvl.Facts.Length + (lvl.Facts.Length == 1 ? " pista" : " pistas");
+                Rectangle detRect = new Rectangle(card.X + 4, titleRect.Bottom, card.Width - 8, Math.Max(18, card.Bottom - titleRect.Bottom - 2));
                 TextRenderer.DrawText(g, details, detailFont, detRect,
                     isLocked ? CoastalTheme.InkMuted : CoastalTheme.InkMedium,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);

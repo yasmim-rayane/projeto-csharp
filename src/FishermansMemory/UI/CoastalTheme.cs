@@ -626,10 +626,9 @@ namespace FishermansMemory.UI
         {
             switch (lane)
             {
-                case Lane.Up: return "CIMA";
                 case Lane.Left: return "ESQUERDA";
                 case Lane.Right: return "DIREITA";
-                default: return "BAIXO";
+                default: return "CENTRO";
             }
         }
 
@@ -637,7 +636,6 @@ namespace FishermansMemory.UI
         {
             switch (lane)
             {
-                case Lane.Up: return "W";
                 case Lane.Left: return "A";
                 case Lane.Right: return "D";
                 default: return "S";
@@ -648,35 +646,45 @@ namespace FishermansMemory.UI
         {
             switch (lane)
             {
-                case Lane.Up: return "↑";
                 case Lane.Left: return "←";
                 case Lane.Right: return "→";
                 default: return "↓";
             }
         }
 
-        // Draws a compact 4-node positional cross showing where a Lane is located spatially
-        public static void DrawLaneCrossMini(Graphics g, Rectangle bounds, Lane highlighted, Color activeColor, Color inactiveColor)
+        // Draws a compact 2-node or 3-node positional bar showing where a Lane is located spatially
+        public static void DrawLaneCrossMini(Graphics g, Rectangle bounds, Lane highlighted, Color activeColor, Color inactiveColor, bool includeCenter = true)
         {
             var oldSmooth = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             int cx = bounds.X + bounds.Width / 2;
             int cy = bounds.Y + bounds.Height / 2;
-            int rx = Math.Max(8, bounds.Width * 32 / 100);
-            int ry = Math.Max(6, bounds.Height * 28 / 100);
-            int dot = Math.Max(6, Math.Min(bounds.Width, bounds.Height) / 4);
+            int rx = Math.Max(10, bounds.Width * 34 / 100);
+            int dy = includeCenter ? Math.Max(2, bounds.Height / 10) : 0;
+            int dot = Math.Max(6, Math.Min(bounds.Width, bounds.Height) / 3);
 
             using (var linePen = new Pen(Color.FromArgb(110, inactiveColor), 1.5f))
             {
-                g.DrawLine(linePen, cx - rx, cy, cx + rx, cy);
-                g.DrawLine(linePen, cx, cy - ry, cx, cy + ry);
+                if (includeCenter)
+                {
+                    g.DrawLine(linePen, cx - rx, cy - dy, cx, cy + dy);
+                    g.DrawLine(linePen, cx, cy + dy, cx + rx, cy - dy);
+                }
+                else
+                {
+                    g.DrawLine(linePen, cx - rx, cy, cx + rx, cy);
+                }
             }
 
-            foreach (Lane lane in new[] { Lane.Up, Lane.Left, Lane.Center, Lane.Right })
+            Lane[] lanes = includeCenter
+                ? new[] { Lane.Left, Lane.Center, Lane.Right }
+                : new[] { Lane.Left, Lane.Right };
+
+            foreach (Lane lane in lanes)
             {
                 int px = cx + (lane == Lane.Left ? -rx : lane == Lane.Right ? rx : 0);
-                int py = cy + (lane == Lane.Up ? -ry : lane == Lane.Center ? ry : 0);
+                int py = cy + (lane == Lane.Center ? dy : -dy);
                 bool isTarget = lane == highlighted;
                 int sz = isTarget ? dot + 3 : dot - 1;
                 Rectangle r = new Rectangle(px - sz / 2, py - sz / 2, sz, sz);

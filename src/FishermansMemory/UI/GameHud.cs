@@ -13,7 +13,7 @@ namespace FishermansMemory.UI
         private int hp = 100, score, combo;
         private string stageTitle = "FASE 1 • PRAIA DAS CONCHAS";
         private string enemySubtitle = "Caranguejo sentinela";
-        private int resolvedAttacks, totalAttacks = 4;
+        private int resolvedAttacks, totalAttacks = 3;
         private readonly List<bool> attackOutcomes = new List<bool>();
         private Rectangle menuButtonRect;
         private bool menuHovered, menuPressed;
@@ -45,7 +45,7 @@ namespace FishermansMemory.UI
             hp = session.Hp;
             score = session.Score;
             combo = session.Combo;
-            stageTitle = (session.Level.Boss ? "BOSS • " : "FASE " + (session.LevelIndex + 1) + " • ") + session.Level.Name.ToUpperInvariant();
+            stageTitle = (session.Level.Boss ? "FASE 6 • BOSS • " : "FASE " + (session.LevelIndex + 1) + " • ") + session.Level.Name.ToUpperInvariant();
             enemySubtitle = session.Level.Enemy;
             resolvedAttacks = session.Resolved;
             totalAttacks = session.Level.Attacks;
@@ -188,13 +188,15 @@ namespace FishermansMemory.UI
             // Draw individual attack beads (✓ hit, ✕ miss, • pending)
             int beadsStartX = botRow.X + txtSz.Width + 6;
             int availBeadsW = botRow.Right - beadsStartX;
-            if (totalAttacks > 0 && availBeadsW >= totalAttacks * 10)
+            int beadGap = totalAttacks > 8 ? 2 : 3;
+            int minBead = totalAttacks > 8 ? 5 : 9;
+            if (totalAttacks > 0 && availBeadsW >= totalAttacks * minBead + (totalAttacks - 1) * beadGap)
             {
-                int beadSz = Math.Min(14, Math.Max(9, (availBeadsW - (totalAttacks - 1) * 3) / totalAttacks));
+                int beadSz = Math.Min(14, Math.Max(minBead, (availBeadsW - (totalAttacks - 1) * beadGap) / totalAttacks));
                 int by = botRow.Y + (botRow.Height - beadSz) / 2;
                 for (int i = 0; i < totalAttacks; i++)
                 {
-                    int bx = beadsStartX + i * (beadSz + 3);
+                    int bx = beadsStartX + i * (beadSz + beadGap);
                     Rectangle bead = new Rectangle(bx, by, beadSz, beadSz);
                     bool resolved = i < attackOutcomes.Count;
                     bool hit = resolved && attackOutcomes[i];
@@ -211,7 +213,7 @@ namespace FishermansMemory.UI
                         g.DrawRectangle(bPen, bead.X, bead.Y, bead.Width - 1, bead.Height - 1);
                     }
 
-                    if (resolved && beadSz >= 10)
+                    if (resolved && beadSz >= 9)
                     {
                         using (var symPen = new Pen(Color.White, 1.5f))
                         {

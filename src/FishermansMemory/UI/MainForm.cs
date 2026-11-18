@@ -40,11 +40,18 @@ namespace FishermansMemory.UI
         private bool returnToCampaignFromTutorial;
         private int introPage;
         private int tutorialStep;
-        private readonly List<Lane> tutorialPattern = new List<Lane> { Lane.Up, Lane.Right, Lane.Center, Lane.Left };
+        private static readonly Lane[][] tutorialSequences =
+        {
+            new[] { Lane.Left, Lane.Center, Lane.Right, Lane.Center },
+            new[] { Lane.Right, Lane.Center, Lane.Left, Lane.Right },
+            new[] { Lane.Center, Lane.Right, Lane.Center, Lane.Left }
+        };
+        private int tutorialSequenceIndex;
+        private readonly List<Lane> tutorialPattern = new List<Lane> { Lane.Left, Lane.Center, Lane.Right, Lane.Center };
         private int tutorialProgress;
         private int tutorialHp = 100;
         private int tutorialCombo;
-        private string tutorialFeedback = "Pressione W, A, S, D ou as setas para praticar a esquiva na areia.";
+        private string tutorialFeedback = "Escolha A (Esq.), S (Centro) ou D (Dir.) e pressione Enter para confirmar.";
         private GameSettings settings = new GameSettings();
 
         private string feedback = "";
@@ -63,10 +70,40 @@ namespace FishermansMemory.UI
             {
                 if (!attackPresentation) return;
                 attackPresentation = false;
-                if (screenMode == ScreenMode.Campaign && game != null && game.Phase != Phase.Input)
-                    Render();
+                if (screenMode == ScreenMode.Campaign && game != null)
+                {
+                    if (game.Phase != Phase.Input)
+                    {
+                        Render();
+                    }
+                    else
+                    {
+                        arena.ConfirmActionEnabled = true;
+                        UpdateCombatFooterPrompt();
+                        arena.Invalidate();
+                    }
+                }
                 else
+                {
+                    arena.ConfirmActionEnabled = (screenMode == ScreenMode.Tutorial && tutorialStep == 2);
                     arena.Invalidate();
+                }
+            };
+            arena.LaneSelectedByMouse += lane =>
+            {
+                if (modalCard.Visible || attackPresentation) return;
+                if (screenMode == ScreenMode.Tutorial && tutorialStep == 2)
+                    SelectTutorialLane(lane);
+                else if (screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Input)
+                    SelectCampaignLane(lane);
+            };
+            arena.ConfirmRequested += (sender, args) =>
+            {
+                if (modalCard.Visible || attackPresentation) return;
+                if (screenMode == ScreenMode.Tutorial && tutorialStep == 2)
+                    ConfirmTutorialMove();
+                else if (screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Input)
+                    MoveAndAttack(arena.PlayerLane);
             };
 
             hud.MenuRequested += (sender, args) =>
@@ -178,6 +215,7 @@ namespace FishermansMemory.UI
             hud.Visible = false;
             menuBanner.Visible = true;
             mainCard.Visible = true;
+            arena.ConfirmActionEnabled = false;
             arena.ShowCombatFooter = false;
             arena.ShowPlatforms = true;
             arena.BackdropDimAlpha = 55;
@@ -304,7 +342,7 @@ namespace FishermansMemory.UI
         {
             CloseModal();
             game = new GameSession();
-            arena.PlayerLane = Lane.Center;
+            arena.PlayerLane = game.Level.Center ? Lane.Center : Lane.Left;
             arena.ClearAttack();
             last = null;
             feedback = "";
@@ -317,7 +355,9 @@ namespace FishermansMemory.UI
             try
             {
                 game = saves.Load();
-                arena.PlayerLane = game.Input.Count > 0 ? game.Input[game.Input.Count - 1] : Lane.Center;
+                arena.PlayerLane = game.Input.Count > 0
+                    ? game.Input[game.Input.Count - 1]
+                    : (game.Level.Center ? Lane.Center : Lane.Left);
                 arena.ClearAttack();
                 last = null;
                 feedback = "";
@@ -453,18 +493,21 @@ namespace FishermansMemory.UI
             if (tutorialStep == 2)
             {
                 ShowArt(0, ArtView.Combat, true);
-                arena.ShowCombatFooter = false;
+                arena.ShowCombatFooter = true;
+                arena.ConfirmActionEnabled = true;
                 arena.ShowPlatforms = true;
                 arena.BackdropDimAlpha = 0;
                 arena.ClearAttack();
                 arena.PlayerLane = Lane.Center;
                 tutorialProgress = 0;
-                tutorialFeedback = "Pressione a tecla destacada acima no teclado (não afeta HP ou Save).";
+                tutorialFeedback = "Escolha A/S/D (ou Setas) para posicionar e Enter para confirmar.";
+                arena.CustomFooterPrompt = "Treino • Posição: " + Levels.Symbol(arena.PlayerLane) + " (" + CoastalTheme.LaneName(arena.PlayerLane) + ") • Pressione Enter ou Confirmar";
                 audio.PlayTrack(MusicTrack.OceanAmbient);
             }
             else
             {
                 ShowArt(0, ArtView.Exploration, false);
+                arena.ConfirmActionEnabled = false;
                 arena.ShowCombatFooter = false;
                 arena.ShowPlatforms = true;
                 arena.BackdropDimAlpha = 120;
@@ -480,7 +523,7 @@ namespace FishermansMemory.UI
                                    tutorialStep == 1 ? "TUTORIAL • 2. ESQUIVA, VIDA E COMBO" :
                                                        "TUTORIAL • 3. PRÁTICA LIVRE NA AREIA";
             mainCard.HeaderSubtitle = tutorialStep == 2
-                ? "Experimente os comandos WASD / Setas em estado isolado"
+                ? "Escolha a posição com A/S/D (ou Setas) e confirme com Enter"
                 : "Guia passo a passo da expedição (sem exigência de reflexos)";
             mainCard.HeaderBadge = "ETAPA " + (tutorialStep + 1) + " / 3";
             mainCard.HeaderHeight = 54;
@@ -573,22 +616,38 @@ namespace FishermansMemory.UI
 
             Arrange();
             if (tutorialStep < 2) btnNextStep.Focus();
-            else btnSkipOrFinish.Focus();
+            else ActiveControl = null;
         }
 
         private void ResetTutorialPracticeSequence()
         {
-            var lanes = new[] { Lane.Up, Lane.Left, Lane.Center, Lane.Right };
-            var rng = new Random();
+            tutorialSequenceIndex = (tutorialSequenceIndex + 1) % tutorialSequences.Length;
             tutorialPattern.Clear();
-            for (int i = 0; i < 4; i++)
-                tutorialPattern.Add(lanes[rng.Next(lanes.Length)]);
+            tutorialPattern.AddRange(tutorialSequences[tutorialSequenceIndex]);
             tutorialProgress = 0;
             tutorialHp = 100;
             tutorialCombo = 0;
             arena.ClearAttack();
-            tutorialFeedback = "HP Treino: 100/100 • Combo: 0/3 — Pressione a tecla do 1º passo.";
+            arena.ConfirmActionEnabled = true;
+            arena.CustomFooterPrompt = "Treino • Posição: " + Levels.Symbol(arena.PlayerLane) + " (" + CoastalTheme.LaneName(arena.PlayerLane) + ") • Pressione Enter ou Confirmar";
+            tutorialFeedback = "HP Treino: 100/100 • Combo: 0/3 — Escolha a tecla do 1º passo e confirme com Enter.";
             RefreshTutorialPracticeBanner();
+        }
+
+        private void SelectTutorialLane(Lane lane)
+        {
+            if (screenMode != ScreenMode.Tutorial || tutorialStep != 2 || attackPresentation) return;
+            arena.PlayerLane = lane;
+            ActiveControl = null;
+            audio.PlayUiHover();
+            arena.CustomFooterPrompt = "Treino • Posição: " + Levels.Symbol(lane) + " (" + CoastalTheme.LaneName(lane) + ") • Pressione Enter ou Confirmar";
+            arena.Invalidate();
+        }
+
+        private void ConfirmTutorialMove()
+        {
+            if (screenMode != ScreenMode.Tutorial || tutorialStep != 2 || attackPresentation) return;
+            ExecuteTutorialPracticeMove(arena.PlayerLane);
         }
 
         private void ExecuteTutorialPracticeMove(Lane chosen)
@@ -653,6 +712,7 @@ namespace FishermansMemory.UI
 
         private void FinishTutorial(bool startCampaignAfter, bool returnToActiveCampaign)
         {
+            arena.ConfirmActionEnabled = false;
             arena.ClearAttack();
             if (startCampaignAfter || returnToActiveCampaign)
             {
@@ -720,19 +780,22 @@ namespace FishermansMemory.UI
                 ClearCardControls(mainCard);
                 currentCardLayout = null;
 
+                if (!g.Level.Center && arena.PlayerLane == Lane.Center)
+                    arena.PlayerLane = Lane.Left;
+
                 ShowArt(g.LevelIndex, ArtView.Combat, g.Level.Center);
                 arena.SetDefeated(g.Hp == 0);
                 arena.ShowCombatFooter = true;
+                arena.ConfirmActionEnabled = (g.Phase == Phase.Input && !attackPresentation);
                 arena.ShowPlatforms = true;
                 arena.BackdropDimAlpha = 0;
                 audio.PlayTrack(g.Level.Boss ? MusicTrack.BossBattle : MusicTrack.CombatBattle);
-                arena.CustomFooterPrompt = ClientSize.Width < 760
-                    ? ("Ataque " + Math.Min(g.Level.Attacks, g.Resolved + 1) + "/" + g.Level.Attacks + " • Escolha posição segura (WASD/Setas)")
-                    : ("Guardião: " + g.Level.Enemy + " • Ataque " + Math.Min(g.Level.Attacks, g.Resolved + 1) + "/" + g.Level.Attacks + " (WASD/Setas)");
+                UpdateCombatFooterPrompt();
                 Arrange();
                 return;
             }
 
+            arena.ConfirmActionEnabled = false;
             arena.ShowCombatFooter = false;
             arena.ShowPlatforms = g.Phase != Phase.Reveal && g.Phase != Phase.Recall;
             arena.BackdropDimAlpha = DefaultBackdropDimForScreen();
@@ -740,7 +803,7 @@ namespace FishermansMemory.UI
             mainCard.Visible = true;
             ClearCardControls(mainCard);
 
-            string stageBadge = (g.Level.Boss ? "BOSS • " : "FASE " + (g.LevelIndex + 1) + " • ") + g.Level.Name.ToUpperInvariant();
+            string stageBadge = (g.Level.Boss ? "FASE 6 • BOSS • " : "FASE " + (g.LevelIndex + 1) + " • ") + g.Level.Name.ToUpperInvariant();
 
             switch (g.Phase)
             {
@@ -813,7 +876,9 @@ namespace FishermansMemory.UI
             var btnReveal = new NauticalButton
             {
                 Text = "Memorizei • Observar o inimigo",
-                SubText = "Ver " + g.Level.Attacks + " ataques",
+                SubText = g.Level.Boss
+                    ? ("Ver 1ª sequência (" + g.Level.SequenceLength + " ataques)")
+                    : ("Ver " + g.Level.Attacks + " ataques"),
                 Icon = NauticalIcon.PlayArrow,
                 StyleVariant = ButtonStyle.Primary,
                 TabIndex = 0
@@ -849,14 +914,18 @@ namespace FishermansMemory.UI
             mainCard.ParchmentInterior = true;
             mainCard.RuledJournalLines = false;
             mainCard.HeaderIcon = NauticalIcon.Compass;
-            mainCard.HeaderTitle = g.Level.Enemy.ToUpperInvariant() + " REVELA " + g.Level.Attacks + " ATAQUES";
-            mainCard.HeaderSubtitle = "Cada cartão indica a única posição SEGURA daquele ataque. Memorize sem pressa.";
+            mainCard.HeaderTitle = g.Level.Boss
+                ? (g.Level.Enemy.ToUpperInvariant() + " • " + g.CurrentWave + "ª SEQUÊNCIA (" + g.Level.SequenceLength + " ATAQUES)")
+                : (g.Level.Enemy.ToUpperInvariant() + " REVELA " + g.Level.Attacks + " ATAQUES");
+            mainCard.HeaderSubtitle = g.Level.Boss
+                ? ("Cada cartão indica a TECLA SEGURA (posição de fuga) do " + (g.CurrentWave == 1 ? "1º ao 8º" : "9º ao 16º") + " ataque. Memorize sem pressa.")
+                : "Cada cartão indica a TECLA SEGURA (posição para escapar) na ordem correta. Memorize sem pressa.";
             mainCard.HeaderBadge = stageBadge;
             mainCard.HeaderHeight = 54;
             mainCard.FooterHeight = 52;
 
             var seqBoard = new SequenceBoardControl();
-            seqBoard.SetPattern(g.Pattern);
+            seqBoard.SetPattern(g.CurrentWavePattern, g.Level.Center, g.CurrentWaveStart);
 
             var btnMenu = new NauticalButton
             {
@@ -870,7 +939,7 @@ namespace FishermansMemory.UI
             var btnStartCombat = new NauticalButton
             {
                 Text = "Iniciar combate (Ocultar sequência)",
-                SubText = "Usar WASD / Setas",
+                SubText = g.Level.Center ? "A/S/D ou Setas + Enter" : "A/D ou Setas + Enter",
                 Icon = NauticalIcon.PlayArrow,
                 StyleVariant = ButtonStyle.Primary,
                 TabIndex = 0
@@ -943,47 +1012,29 @@ namespace FishermansMemory.UI
                 else
                 {
                     int wrongCount = 0;
-                    NauticalQuestionInput firstWrong = null;
                     for (int i = 0; i < questionControls.Count; i++)
                     {
                         bool ok = g.IsFactCorrect(i, typed[i]);
                         questionControls[i].SetValidation(ok);
-                        if (!ok)
-                        {
-                            wrongCount++;
-                            if (firstWrong == null) firstWrong = questionControls[i];
-                        }
+                        if (!ok) wrongCount++;
                     }
 
                     feedbackBanner.IsError = true;
                     feedbackBanner.BannerText = wrongCount == 1
-                        ? "1 resposta não confere com o diário. Revise ou confirme o envio mesmo assim."
-                        : (wrongCount + " respostas não conferem com o diário. Revise ou confirme o envio mesmo assim.");
+                        ? "1 resposta não confere com o diário. É necessário repetir a fase."
+                        : (wrongCount + " respostas não conferem com o diário. É necessário repetir a fase.");
                     feedbackBanner.Invalidate();
 
                     string msg = (wrongCount == questionControls.Count && questionControls.Count > 1
                         ? "Nenhuma das respostas digitadas corresponde às informações do diário."
                         : (wrongCount + " de " + questionControls.Count + " resposta(s) não correspondem às informações do diário."))
-                        + "\n\nDeseja enviar mesmo assim? Você avançará para a próxima etapa, porém receberá uma pontuação menor (sem o bônus completo de memória +500 e +5×HP).";
+                        + "\n\nConforme as regras da expedição, ao errar a recuperação da memória você deverá repetir esta fase.";
 
-                    ShowConfirmationModal(
-                        "VOCÊ TEM CERTEZA?",
-                        "Nem todas as respostas correspondem ao diário",
+                    ShowRepeatStageModal(
+                        "MEMÓRIA INCORRETA • REPETIR FASE",
+                        "As pistas não foram recuperadas corretamente",
                         msg,
-                        "Enviar mesmo assim",
-                        "Revisar respostas",
-                        () =>
-                        {
-                            g.SubmitRecallWithErrors(typed);
-                            Persist();
-                            Render();
-                        },
-                        () =>
-                        {
-                            if (firstWrong != null)
-                                firstWrong.InnerTextBox.Focus();
-                        },
-                        "Pressione ESC ou clique em Revisar respostas para corrigir sem perder o que você digitou.");
+                        () => Act(g.RepeatCurrentLevel));
                 }
             };
 
@@ -1236,9 +1287,9 @@ namespace FishermansMemory.UI
             var victoryCtrl = new EndScreenSummaryControl(
                 true,
                 "O Leviatã recua. Você devolve a pérola ao farol e a ilha recupera seu nome. As histórias voltam a atravessar o mar.",
-                g.Score >= 5700
-                    ? "★ Campanha Perfeita! Você concluiu toda a travessia sem nenhum erro!"
-                    : "Todas as memórias das três regiões foram restauradas ao diário.",
+                g.Score >= 12050
+                    ? "★ Campanha Perfeita! Você concluiu todas as 6 fases sem nenhum erro!"
+                    : "Todas as memórias das seis regiões da ilha foram restauradas ao diário.",
                 g.Score,
                 g.Hp,
                 "Expedição concluída • " + g.Score + " pontos • " + g.Hp + " HP restantes");
@@ -1399,6 +1450,61 @@ namespace FishermansMemory.UI
             btnOk.Focus();
         }
 
+        private void ShowRepeatStageModal(string title, string subtitle, string message, Action onRepeat)
+        {
+            PrepareModalOpen();
+            ClearCardControls(modalCard);
+            modalCard.ParchmentInterior = true;
+            modalCard.RuledJournalLines = false;
+            modalCard.HeaderIcon = NauticalIcon.CrossDanger;
+            modalCard.HeaderTitle = title;
+            modalCard.HeaderSubtitle = subtitle;
+            modalCard.HeaderBadge = "REPETIR";
+            modalCard.HeaderHeight = 54;
+            modalCard.FooterHeight = 54;
+
+            var msgBox = new NarrativePageControl(
+                "Revisão do Diário de Expedição",
+                message,
+                "Pressione Enter ou clique em Repetir fase para recomeçar esta região.");
+
+            var btnRepeat = new NauticalButton
+            {
+                Text = "Repetir esta fase",
+                Icon = NauticalIcon.PlayArrow,
+                StyleVariant = ButtonStyle.Primary,
+                TabIndex = 0
+            };
+            btnRepeat.Click += (s, e) =>
+            {
+                CloseModal();
+                if (onRepeat != null) onRepeat();
+            };
+
+            modalCancelAction = () =>
+            {
+                CloseModal();
+                if (onRepeat != null) onRepeat();
+            };
+            modalCard.Controls.AddRange(new Control[] { msgBox, btnRepeat });
+
+            currentModalLayout = () =>
+            {
+                Rectangle content = modalCard.ContentBounds;
+                Rectangle footer = modalCard.FooterBounds;
+                msgBox.SetBounds(content.X, content.Y, content.Width, content.Height);
+
+                int btnH = Math.Max(34, footer.Height - 6);
+                int btnW = Math.Min(footer.Width, 300);
+                btnRepeat.SetBounds(footer.X + (footer.Width - btnW) / 2, footer.Y + 3, btnW, btnH);
+            };
+
+            modalCard.Visible = true;
+            modalCard.BringToFront();
+            Arrange();
+            btnRepeat.Focus();
+        }
+
         private void ShowOptionsModal(bool inCampaign)
         {
             PrepareModalOpen();
@@ -1557,9 +1663,36 @@ namespace FishermansMemory.UI
             arena.Invalidate();
         }
 
+        private void UpdateCombatFooterPrompt()
+        {
+            if (game == null) return;
+            int atkNum = Math.Min(game.Level.Attacks, game.Resolved + 1);
+            string posStr = Levels.Symbol(arena.PlayerLane) + " (" + CoastalTheme.LaneName(arena.PlayerLane) + ")";
+            string keysHint = game.Level.Center ? "A/S/D" : "A/D";
+            arena.CustomFooterPrompt = ClientSize.Width < 760
+                ? ("Atk " + atkNum + "/" + game.Level.Attacks + " • Escolhida: " + posStr + " • Enter confirma")
+                : ("Guardião: " + game.Level.Enemy + " • Ataque " + atkNum + "/" + game.Level.Attacks + " • Posição: " + posStr + " (" + keysHint + " muda, Enter confirma)");
+        }
+
+        private void SelectCampaignLane(Lane lane)
+        {
+            if (game == null || game.Phase != Phase.Input || attackPresentation) return;
+            if (!game.Level.Center && lane == Lane.Center)
+            {
+                arena.CustomFooterPrompt = "Fase 1 possui apenas Esquerda (A ←) e Direita (D →). Posição: " + Levels.Symbol(arena.PlayerLane);
+                arena.Invalidate();
+                return;
+            }
+            arena.PlayerLane = lane;
+            audio.PlayUiHover();
+            UpdateCombatFooterPrompt();
+            arena.Invalidate();
+        }
+
         private void MoveAndAttack(Lane lane)
         {
-            if (game == null || game.Phase != Phase.Input) return;
+            if (game == null || game.Phase != Phase.Input || attackPresentation) return;
+            if (!game.Level.Center && lane == Lane.Center) return;
             if (mainCard.Visible)
             {
                 mainCard.Visible = false;
@@ -1567,6 +1700,7 @@ namespace FishermansMemory.UI
                 arena.ShowCombatFooter = true;
                 Arrange();
             }
+            arena.ConfirmActionEnabled = false;
             audio.PlayTrack(game.Level.Boss ? MusicTrack.BossBattle : MusicTrack.CombatBattle);
             last = game.SubmitMove(lane);
             attackPresentation = true;
@@ -1633,7 +1767,7 @@ namespace FishermansMemory.UI
                     arena.PlayArea = ClientRectangle;
                 }
                 // 3. Tutorial Step 3 (Live Sandbox Practice) & Reveal Screen:
-                // Position card in the upper area so the live enemy & 4 WASD platforms are visible below!
+                // Position card in the upper area so the live enemy & position platforms are visible below!
                 else if ((screenMode == ScreenMode.Tutorial && tutorialStep == 2) ||
                          (screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Reveal && !attackPresentation))
                 {
@@ -1663,14 +1797,14 @@ namespace FishermansMemory.UI
                 // 5. Narrative, Tutorial 1-2, Diary, Recall, Results, Map, GameOver, Victory
                 else if (currentCardLayout != null)
                 {
-                    int maxW = (screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Map)
-                        ? (int)(880 * dpi)
-                        : (int)(760 * dpi);
+                    bool isMap = screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Map;
+                    bool isRecall = screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Recall;
+                    int maxW = isMap ? (int)(920 * dpi) : (int)(760 * dpi);
                     int cardW = Math.Min(cw - 16, Math.Max(460, Math.Min(maxW, cw * 84 / 100)));
 
-                    int targetH = (screenMode == ScreenMode.Campaign && game != null && game.Phase == Phase.Recall)
-                        ? (int)((230 + game.Level.Facts.Length * 74) * dpi)
-                        : (int)(410 * dpi);
+                    int targetH = isRecall
+                        ? (int)((210 + game.Level.Facts.Length * 68) * dpi)
+                        : isMap ? (int)(480 * dpi) : (int)(410 * dpi);
                     int cardH = Math.Min(workArea.Height - 12, Math.Max(270, targetH));
 
                     mainCard.HeaderHeight = compact ? 44 : 56;
@@ -1755,7 +1889,7 @@ namespace FishermansMemory.UI
                 }
             }
 
-            // When a modal window is open, block all combat/practice WASD keys so no accidental move occurs!
+            // When a modal window is open, block all combat/practice position keys so no accidental move occurs!
             if (modalCard.Visible)
                 return HandleDialogNavigationSound(ref msg, keyData);
 
@@ -1765,19 +1899,30 @@ namespace FishermansMemory.UI
                 Lane? tutLane = MapKeyToLane(keyData);
                 if (tutLane.HasValue)
                 {
-                    if (!repeated) ExecuteTutorialPracticeMove(tutLane.Value);
+                    if (!repeated) SelectTutorialLane(tutLane.Value);
+                    return true;
+                }
+                if (keyData == Keys.Enter && !(ActiveControl is NauticalButton))
+                {
+                    if (!repeated) ConfirmTutorialMove();
                     return true;
                 }
             }
 
-            // Campaign Combat Input
+            // Campaign Combat Input (choose position with A/S/D or Arrows, confirm with Enter)
             if (screenMode == ScreenMode.Campaign && (game?.Phase == Phase.Input || attackPresentation))
             {
                 Lane? lane = MapKeyToLane(keyData);
                 if (lane.HasValue)
                 {
-                    // Bit 30 = tecla já estava pressionada: ignora autorrepetição do Windows.
-                    if (!repeated) MoveAndAttack(lane.Value);
+                    if (!repeated && !attackPresentation && game?.Phase == Phase.Input)
+                        SelectCampaignLane(lane.Value);
+                    return true;
+                }
+                if (keyData == Keys.Enter)
+                {
+                    if (!repeated && !attackPresentation && game?.Phase == Phase.Input)
+                        MoveAndAttack(arena.PlayerLane);
                     return true;
                 }
             }
@@ -1807,9 +1952,6 @@ namespace FishermansMemory.UI
                 case Keys.S:
                 case Keys.Down:
                     return Lane.Center;
-                case Keys.W:
-                case Keys.Up:
-                    return Lane.Up;
                 default:
                     return null;
             }
@@ -1985,13 +2127,13 @@ namespace FishermansMemory.UI
                 {
                     "1. LEIA O DIÁRIO DA FASE",
                     "2. OBSERVE OS SINAIS DO GUARDIÃO",
-                    "3. ESQUIVE E RESPONDA AS PISTAS"
+                    "3. POSICIONE, CONFIRME E RESPONDA"
                 };
                 string[] bodies =
                 {
-                    "Cada fase traz um pequeno relato. Guarde os detalhes importantes — eles serão perguntados após o combate.",
-                    "O guardião mostra a sequência das posições seguras antes da luta. Observe sem pressa e clique em Iniciar combate.",
-                    "Use WASD ou as Setas para desviar de cada golpe. Ao final, responda às perguntas do diário para avançar."
+                    "Cada fase traz uma informação para memorizar. Guarde os detalhes — eles serão cobrados após o combate.",
+                    "O guardião mostra a sequência das teclas seguras antes da luta. Observe sem pressa e clique em Iniciar combate.",
+                    "Escolha a posição (A/S/D ou Setas) e confirme com Enter ou no botão Confirmar. Ao final, recupere a memória para avançar."
                 };
 
                 int cardGap = compact ? 6 : 10;
@@ -2011,26 +2153,30 @@ namespace FishermansMemory.UI
             }
             else
             {
-                // Step 2: Clean 4-position map on the left + 3 short combat/HP rules on the right
-                int leftW = Width * 42 / 100;
+                // Step 2: Clean 3-position layout on the left + combat/HP rules on the right
+                int leftW = Width * 44 / 100;
                 Rectangle leftCol = new Rectangle(pad, pad, leftW - pad, Height - pad * 2);
                 Rectangle rightCol = new Rectangle(leftCol.Right + 10, pad, Width - leftCol.Right - pad - 10, Height - pad * 2);
 
                 CoastalTheme.DrawSubCard(g, leftCol, CoastalTheme.OceanDeep, CoastalTheme.WoodBase, CoastalTheme.BrassGold);
                 var diagTitle = CoastalTheme.TitleFont(compact ? 8.5f : 10f, FontStyle.Bold);
-                TextRenderer.DrawText(g, "AS 4 POSIÇÕES", diagTitle,
+                TextRenderer.DrawText(g, "POSIÇÕES E CONTROLES", diagTitle,
                     new Rectangle(leftCol.X + 6, leftCol.Y + 6, leftCol.Width - 12, 22),
                     CoastalTheme.BrassBright, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
                 int cx = leftCol.X + leftCol.Width / 2;
-                int cy = leftCol.Y + leftCol.Height / 2 + 8;
-                int ox = Math.Min(64, leftCol.Width * 28 / 100);
-                int oy = Math.Min(44, leftCol.Height * 24 / 100);
+                int cy = leftCol.Y + leftCol.Height / 2 + 2;
+                int ox = Math.Min(78, leftCol.Width * 31 / 100);
+                int oy = Math.Min(30, leftCol.Height * 14 / 100);
 
-                DrawPositionNode(g, cx, cy - oy, "W ↑", "CIMA", false, compact);
-                DrawPositionNode(g, cx - ox, cy, "A ←", "ESQ.", false, compact);
-                DrawPositionNode(g, cx + ox, cy, "D →", "DIR.", false, compact);
-                DrawPositionNode(g, cx, cy + oy, "S ↓", "BAIXO", true, compact);
+                DrawPositionNode(g, cx - ox, cy - oy / 2, "A ←", "ESQ.", false, compact);
+                DrawPositionNode(g, cx, cy + oy, "S ↓", "CENTRO*", true, compact);
+                DrawPositionNode(g, cx + ox, cy - oy / 2, "D →", "DIR.", false, compact);
+
+                var noteFont = CoastalTheme.BodyFont(compact ? 7.5f : 8.5f, FontStyle.Regular);
+                TextRenderer.DrawText(g, "*Fase 1: apenas Esq./Dir. • Enter confirma", noteFont,
+                    new Rectangle(leftCol.X + 8, leftCol.Bottom - 28, leftCol.Width - 16, 22),
+                    CoastalTheme.SeafoamLight, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
                 CoastalTheme.DrawSubCard(g, rightCol, CoastalTheme.ParchmentMid, CoastalTheme.WoodBase, CoastalTheme.SafeGreenDark);
                 var hFont = CoastalTheme.TitleFont(compact ? 9f : 10.5f, FontStyle.Bold);
@@ -2041,9 +2187,9 @@ namespace FishermansMemory.UI
                     CoastalTheme.SafeGreenDark, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
                 string rulesRight =
-                    "• 1 tecla = 1 ataque imediato (sem tempo limite para pensar).\n\n" +
-                    "• Acerto dá +100 pts. Erro causa dano (−20 HP, −30 no Boss).\n\n" +
-                    "• Combo ×3: 3 acertos seguidos curam +50 HP e dão +150 pts.";
+                    "• Escolha com A/S/D ou Setas e confirme com Enter (sem pressa).\n\n" +
+                    "• Acerto dá +100 pts. Erro causa dano (−20 HP, −30 no Boss) e −50 pts.\n\n" +
+                    "• Combo ×3: 3 acertos seguidos curam +50% do HP (máx. 100) e dão +150 pts.";
 
                 TextRenderer.DrawText(g, rulesRight, bodyFont,
                     new Rectangle(rightCol.X + 12, rightCol.Y + 36, rightCol.Width - 24, rightCol.Height - 44),

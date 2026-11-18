@@ -38,7 +38,15 @@ namespace FishermansMemory.UI
         public bool ShowPlatforms { get; set; } = true;
         public int BackdropDimAlpha { get; set; } = 0;
         public string CustomFooterPrompt { get; set; } = "";
+        public bool ConfirmActionEnabled { get; set; }
         public event EventHandler AttackFinished;
+        public event EventHandler ConfirmRequested;
+        public event Action<Lane> LaneSelectedByMouse;
+
+        private Rectangle confirmButtonRect;
+        private bool confirmHovered, confirmPressed;
+        private Lane? hoveredLane;
+        private bool centerLaneAllowed = true;
 
         private bool motionEnabled = true, presentationPaused;
 
@@ -95,6 +103,10 @@ namespace FishermansMemory.UI
 
         public void Configure(int index, ArtView mode, bool center)
         {
+            centerLaneAllowed = center;
+            if (!center && PlayerLane == Lane.Center)
+                PlayerLane = Lane.Left;
+
             if (stage != index || view != mode)
             {
                 previousStage = stage;
@@ -148,10 +160,120 @@ namespace FishermansMemory.UI
         {
             switch (lane)
             {
-                case Lane.Left: return new PointF(190, 292);
-                case Lane.Up: return new PointF(425, 236);
-                case Lane.Right: return new PointF(660, 292);
-                default: return new PointF(425, 340);
+                case Lane.Left: return new PointF(185, 300);
+                case Lane.Right: return new PointF(665, 300);
+                default: return new PointF(425, 316);
+            }
+        }
+
+        private RectangleF HitRectForLane(Lane lane)
+        {
+            PointF p = Position(lane);
+            if (lane == Lane.Left) return new RectangleF(p.X - 148, p.Y - 68, 210, 96);
+            return new RectangleF(p.X - 60, p.Y - 68, 208, 96);
+        }
+
+        private bool TryPointToStageCoords(Point clientPt, out PointF stagePt)
+        {
+            Rectangle area = PlayArea.Width > 0 && PlayArea.Height > 0 ? PlayArea : ClientRectangle;
+            int footerReserve = (view == ArtView.Combat && ShowCombatFooter) ? Math.Min(46, Math.Max(36, area.Height * 9 / 100)) : 0;
+            Rectangle stageArea = new Rectangle(area.X, area.Y, area.Width, Math.Max(100, area.Height - footerReserve));
+            float scale = Math.Min(stageArea.Width / 850f, stageArea.Height / 390f);
+            if (scale <= 0.01f)
+            {
+                stagePt = PointF.Empty;
+                return false;
+            }
+            float ox = stageArea.X + (stageArea.Width - 850 * scale) / 2f;
+            float oy = stageArea.Y + (stageArea.Height - 390 * scale) / 2f;
+            stagePt = new PointF((clientPt.X - ox) / scale, (clientPt.Y - oy) / scale);
+            return true;
+        }
+
+        private Lane[] ActiveLanes() =>
+            centerLaneAllowed
+                ? new[] { Lane.Left, Lane.Center, Lane.Right }
+                : new[] { Lane.Left, Lane.Right };
+
+        private Lane? HitTestLane(Point clientPt)
+        {
+            if (view != ArtView.Combat || !ShowPlatforms || !ConfirmActionEnabled || playing || dead)
+                return null;
+            PointF stagePt;
+            if (!TryPointToStageCoords(clientPt, out stagePt)) return null;
+
+            foreach (Lane lane in ActiveLanes())
+            {
+                if (HitRectForLane(lane).Contains(stagePt))
+                    return lane;
+            }
+            return null;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            bool overConfirm = ConfirmActionEnabled && ShowCombatFooter && view == ArtView.Combat && confirmButtonRect.Contains(e.Location);
+            Lane? overLane = HitTestLane(e.Location);
+
+            if (overConfirm != confirmHovered || overLane != hoveredLane)
+            {
+                if (overConfirm && !confirmHovered) CoastalTheme.NotifyButtonHover();
+                confirmHovered = overConfirm;
+                hoveredLane = overLane;
+                Cursor = (confirmHovered || hoveredLane.HasValue) ? Cursors.Hand : Cursors.Default;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (confirmHovered || confirmPressed || hoveredLane.HasValue)
+            {
+                confirmHovered = false;
+                confirmPressed = false;
+                hoveredLane = null;
+                Cursor = Cursors.Default;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+            if (ConfirmActionEnabled && ShowCombatFooter && view == ArtView.Combat && confirmButtonRect.Contains(e.Location))
+            {
+                confirmPressed = true;
+                Invalidate();
+                return;
+            }
+            Lane? lane = HitTestLane(e.Location);
+            if (lane.HasValue)
+            {
+                CoastalTheme.NotifyButtonSelect();
+                PlayerLane = lane.Value;
+                Invalidate();
+                var handler = LaneSelectedByMouse;
+                if (handler != null) handler(lane.Value);
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (confirmPressed)
+            {
+                bool trigger = ConfirmActionEnabled && confirmButtonRect.Contains(e.Location);
+                confirmPressed = false;
+                Invalidate();
+                if (trigger)
+                {
+                    CoastalTheme.NotifyButtonSelect();
+                    var handler = ConfirmRequested;
+                    if (handler != null) handler(this, EventArgs.Empty);
+                }
             }
         }
 
@@ -190,7 +312,7 @@ namespace FishermansMemory.UI
                     target.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     float scale = Math.Max(Width / (float)bitmap.Width, Height / (float)bitmap.Height);
                     // Keep the Leviathan's head inside the frame on wide monitors.
-                    int y = key == "scene.2" ? 0 : (int)((Height - bitmap.Height * scale) / 2);
+                    int y = key == "scene.5" ? 0 : (int)((Height - bitmap.Height * scale) / 2);
                     var dest = new Rectangle((int)((Width - bitmap.Width * scale) / 2), y,
                         (int)Math.Ceiling(bitmap.Width * scale), (int)Math.Ceiling(bitmap.Height * scale));
                     edges.SetWrapMode(WrapMode.TileFlipXY);
@@ -263,12 +385,33 @@ namespace FishermansMemory.UI
             // Wind-up, impact and recovery occupy separate parts of one visual action.
             float thrust = strike ? (float)Math.Sin(Math.PI * Math.Max(0, (progress - .2f) / .8f)) : 0;
             float windup = strike && progress < .2f ? progress / .2f : 0;
-            float width = validStage == 2 ? 300 : validStage == 0 ? 164 : 160;
-            float height = validStage == 2 ? 165 : validStage == 0 ? 146 : 163;
-            float x = 425 + (validStage == 1 && MotionEnabled ? (float)Math.Sin(t * 1.6) * 6 : 0);
-            float y = validStage == 2 ? 92 : validStage == 0 ? 104 : 96;
-            y += breath * 2 + thrust * (validStage == 1 ? 28 : validStage == 0 ? 24 : 18) - windup * 7;
-            float rotation = strike ? (validStage == 1 ? -7 : validStage == 0 ? 5 : 3) * thrust : breath * (validStage == 0 ? 1.2f : .8f);
+
+            float width, height, baseY, swayAmp = 0, swaySpeed = 1.6f, thrustDist = 24, strikeRot = 4;
+            switch (validStage)
+            {
+                case 0: // Caranguejo
+                    width = 164; height = 146; baseY = 104; thrustDist = 24; strikeRot = 5;
+                    break;
+                case 1: // Tubarão
+                    width = 160; height = 163; baseY = 96; swayAmp = 6; swaySpeed = 1.6f; thrustDist = 28; strikeRot = -7;
+                    break;
+                case 2: // Pelicano
+                    width = 168; height = 158; baseY = 98; swayAmp = 4; swaySpeed = 1.4f; thrustDist = 26; strikeRot = 4;
+                    break;
+                case 3: // Arraia
+                    width = 172; height = 161; baseY = 96; swayAmp = 9; swaySpeed = 2.0f; thrustDist = 26; strikeRot = -5;
+                    break;
+                case 4: // Moreia
+                    width = 166; height = 156; baseY = 98; swayAmp = 5; swaySpeed = 1.8f; thrustDist = 30; strikeRot = 4;
+                    break;
+                default: // Fase 6: Boss Leviatã
+                    width = 300; height = 165; baseY = 92; thrustDist = 18; strikeRot = 3;
+                    break;
+            }
+
+            float x = 425 + (MotionEnabled && !dead && swayAmp > 0 ? (float)Math.Sin(t * swaySpeed) * swayAmp : 0);
+            float y = baseY + breath * (validStage == 3 ? 2.8f : 2f) + thrust * thrustDist - windup * 7;
+            float rotation = strike ? strikeRot * thrust : breath * (validStage == 0 || validStage == 4 ? 1.2f : .8f);
 
             var state = g.Save();
             g.TranslateTransform(x, y);
@@ -351,7 +494,6 @@ namespace FishermansMemory.UI
                             PutPixelBlock(g, crimson, px, py, step);
                             if (i > 4 && i < steps - 4)
                                 PutPixelBlock(g, coral, px - side * step * 0.5f, py, step);
-                            // Inner serrated claw teeth facing inward
                             if (i == 9 || i == 16 || i == 23)
                             {
                                 PutPixelBlock(g, outline, px - side * step * 2f, py, step);
@@ -360,7 +502,6 @@ namespace FishermansMemory.UI
                         }
                     }
 
-                    // Impact pixel sparks when claws snap shut
                     if (hit > .52f)
                     {
                         float burst = (hit - .52f) / .48f;
@@ -378,7 +519,7 @@ namespace FishermansMemory.UI
             }
             else if (validStage == 1)
             {
-                // Pixel-art triple diagonal water-blade slashes (continuous, no checkerboard gaps)
+                // Pixel-art triple diagonal water-blade slashes
                 using (var outline = new SolidBrush(Color.FromArgb(10, 26, 48)))
                 using (var aqua = new SolidBrush(Color.FromArgb(40, 196, 240)))
                 using (var foam = new SolidBrush(Color.FromArgb(240, 250, 255)))
@@ -415,9 +556,127 @@ namespace FishermansMemory.UI
                     }
                 }
             }
+            else if (validStage == 2)
+            {
+                // Pelicano: mergulho de bico dourado com rajadas laterais de vento e penas
+                float diveY = y - 54f + hit * 54f;
+                using (var outline = new SolidBrush(Color.FromArgb(24, 16, 12)))
+                using (var goldBeak = new SolidBrush(Color.FromArgb(236, 166, 48)))
+                using (var cream = new SolidBrush(Color.FromArgb(248, 242, 228)))
+                using (var gust = new SolidBrush(Color.FromArgb(220, 236, 250)))
+                {
+                    // Central downward beak wedge
+                    for (int row = 0; row <= 10; row++)
+                    {
+                        int halfW = Math.Max(0, (10 - row) / 2);
+                        float py = diveY - 36f + row * step;
+                        for (int dx = -halfW - 1; dx <= halfW + 1; dx++)
+                        {
+                            bool edge = Math.Abs(dx) == halfW + 1 || row == 0 || row == 10;
+                            Brush b = edge ? outline : (Math.Abs(dx) <= 1 ? cream : goldBeak);
+                            PutPixelBlock(g, b, x + dx * step, py, step);
+                        }
+                    }
+                    // Twin sweeping wind/feather arcs on left & right
+                    if (hit > .35f)
+                    {
+                        float spread = (hit - .35f) / .65f;
+                        for (int side = -1; side <= 1; side += 2)
+                        {
+                            for (int i = 0; i <= 14; i++)
+                            {
+                                float u = i / 14f;
+                                float gx = x + side * (12f + u * (24f + spread * 18f));
+                                float gy = y - (float)Math.Sin(u * Math.PI) * 18f + 4f;
+                                PutPixelBlock(g, outline, gx, gy - step, step);
+                                PutPixelBlock(g, outline, gx, gy + step, step);
+                                PutPixelBlock(g, gust, gx, gy, step);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (validStage == 3)
+            {
+                // Arraia: chicote de cauda turquesa em arco com faíscas bioelétricas douradas
+                using (var outline = new SolidBrush(Color.FromArgb(10, 24, 34)))
+                using (var teal = new SolidBrush(Color.FromArgb(38, 138, 152)))
+                using (var shock = new SolidBrush(Color.FromArgb(255, 224, 88)))
+                using (var spark = new SolidBrush(Color.FromArgb(255, 250, 210)))
+                {
+                    const int steps = 36;
+                    int maxStep = Math.Max(4, (int)(steps * hit));
+                    for (int pass = 0; pass < 2; pass++)
+                    {
+                        for (int i = 0; i <= maxStep; i++)
+                        {
+                            float u = i / (float)steps;
+                            float angle = -2.35f + u * 3.1f;
+                            float ax = x + (float)Math.Cos(angle) * 34f;
+                            float ay = y - 10f + (float)Math.Sin(angle) * 28f;
+                            if (pass == 0)
+                            {
+                                DrawPixelRingCluster(g, outline, outline, outline, ax, ay, 1, step);
+                            }
+                            else
+                            {
+                                Brush b = (i > maxStep - 5) ? shock : teal;
+                                PutPixelBlock(g, b, ax, ay, step);
+                                if (i % 5 == 0)
+                                    PutPixelBlock(g, spark, ax - step, ay - step, step);
+                            }
+                        }
+                    }
+                    if (hit > .55f)
+                    {
+                        float burst = (hit - .55f) / .45f;
+                        int d = (int)(10 + burst * 18);
+                        PutPixelBlock(g, shock, x - d, y - d / 2f, step);
+                        PutPixelBlock(g, shock, x + d, y - d / 2f, step);
+                        PutPixelBlock(g, spark, x - d / 2f, y + d / 2f, step);
+                        PutPixelBlock(g, spark, x + d / 2f, y + d / 2f, step);
+                    }
+                }
+            }
+            else if (validStage == 4)
+            {
+                // Moreia: bote vertical de mandíbulas verde-esmeralda com presas brancas convergentes
+                float jawGap = (1f - hit) * 28f;
+                using (var outline = new SolidBrush(Color.FromArgb(10, 24, 16)))
+                using (var emerald = new SolidBrush(Color.FromArgb(46, 148, 86)))
+                using (var lime = new SolidBrush(Color.FromArgb(172, 224, 118)))
+                using (var fang = new SolidBrush(Color.FromArgb(248, 252, 244)))
+                {
+                    for (int jaw = -1; jaw <= 1; jaw += 2)
+                    {
+                        float jy = y + jaw * (6f + jawGap);
+                        for (int dx = -6; dx <= 6; dx++)
+                        {
+                            float curve = (dx * dx) * 0.45f * jaw;
+                            float px = x + dx * step;
+                            float py = jy - curve;
+                            PutPixelBlock(g, outline, px, py - step, step);
+                            PutPixelBlock(g, outline, px, py + step, step);
+                            PutPixelBlock(g, emerald, px, py, step);
+                            if (Math.Abs(dx) % 3 == 1)
+                            {
+                                // Sharp inward-pointing fangs
+                                PutPixelBlock(g, outline, px, py - jaw * step * 2, step);
+                                PutPixelBlock(g, fang, px, py - jaw * step, step);
+                            }
+                        }
+                    }
+                    if (hit > .55f)
+                    {
+                        PutPixelBlock(g, lime, x - 20, y, step);
+                        PutPixelBlock(g, lime, x + 20, y, step);
+                        PutPixelBlock(g, fang, x, y, step);
+                    }
+                }
+            }
             else
             {
-                // Pixel-art segmented tentacle slam extending from the Leviathan
+                // Boss Leviatã: tentáculo segmentado índigo/roxo com ventosas
                 PointF p0 = new PointF(425, 140);
                 PointF p1 = new PointF(x - 110, 165);
                 PointF p2 = new PointF(x + 65, y - 65);
@@ -430,7 +689,6 @@ namespace FishermansMemory.UI
                 {
                     const int steps = 56;
                     int maxStep = Math.Max(4, (int)(steps * hit));
-                    // Pass 1: continuous dark pixel outline
                     for (int i = 0; i <= maxStep; i++)
                     {
                         float u = i / (float)steps;
@@ -440,7 +698,6 @@ namespace FishermansMemory.UI
                         int rad = u < 0.72f ? 2 : 1;
                         DrawPixelRingCluster(g, outline, outline, outline, bx, by, rad, step);
                     }
-                    // Pass 2: inner indigo body & highlight ridge
                     for (int i = 0; i <= maxStep; i++)
                     {
                         float u = i / (float)steps;
@@ -473,40 +730,37 @@ namespace FishermansMemory.UI
 
         private void Combat(Graphics g)
         {
-            int validStage = Math.Max(0, Math.Min(Levels.All.Count - 1, stage));
             double elapsed = clock.Elapsed.TotalSeconds - action;
             float progress = MotionEnabled ? (float)Math.Min(1, elapsed / AttackDuration) : .65f;
 
             Enemy(g, progress);
             if (!ShowPlatforms) return;
 
-            // Subtle arena ground shadow ellipse to anchor the 4 platforms without obscuring the pixel-art scene
             var oldSmooth = g.SmoothingMode;
             var oldTextHint = g.TextRenderingHint;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             using (var arenaShade = new SolidBrush(Color.FromArgb(72, 6, 14, 24)))
-                g.FillEllipse(arenaShade, 75, 204, 700, 176);
+                g.FillEllipse(arenaShade, 75, 224, 700, 152);
 
             var keyFont = CoastalTheme.TitleFont(13f, FontStyle.Bold);
             var dirFont = CoastalTheme.TitleFont(8f, FontStyle.Bold);
             var tagFont = CoastalTheme.TitleFont(8.5f, FontStyle.Bold);
 
             using (var centerFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
-            foreach (Lane lane in Levels.Lanes(Levels.All[validStage]))
+            foreach (Lane lane in ActiveLanes())
             {
                 PointF p = Position(lane);
                 bool selected = PlayerLane == lane;
+                bool hovered = hoveredLane == lane && !playing && ConfirmActionEnabled;
                 bool showingResult = attack != null && playing;
-                bool wasLastSafe = attack != null && !playing && attack.Safe == lane;
 
                 Color ringColor = showingResult
                     ? (attack.Safe == lane ? CoastalTheme.SafeGreenBright : CoastalTheme.DangerCoral)
-                    : (selected ? CoastalTheme.BrassBright : Color.FromArgb(215, 228, 240));
+                    : (selected ? CoastalTheme.BrassBright : (hovered ? CoastalTheme.SeafoamLight : Color.FromArgb(215, 228, 240)));
 
                 var platform = new RectangleF(p.X - 58, p.Y - 13, 116, 34);
 
-                // Drop shadow & dark rim
                 using (var dropBrush = new SolidBrush(Color.FromArgb(160, 4, 8, 14)))
                     g.FillEllipse(dropBrush, platform.X - 3, platform.Y + 4, platform.Width + 6, platform.Height + 2);
 
@@ -518,7 +772,7 @@ namespace FishermansMemory.UI
                 using (var outline = new Pen(CoastalTheme.WoodOutline, 7))
                     g.DrawEllipse(outline, platform);
 
-                using (var pen = new Pen(selected && !showingResult ? CoastalTheme.BrassBright : ringColor, selected || showingResult ? 4.5f : 2.5f))
+                using (var pen = new Pen(selected && !showingResult ? CoastalTheme.BrassBright : ringColor, selected || showingResult || hovered ? 4.5f : 2.5f))
                     g.DrawEllipse(pen, platform);
 
                 if (selected)
@@ -528,10 +782,10 @@ namespace FishermansMemory.UI
                         g.DrawEllipse(goldInner, innerRing);
                 }
 
-                // Nautical Key Plaque associated with the platform (drawn using GDI+ so it scales with Arena transform)
+                // Nautical Key Plaque associated with the platform
                 float badgeX = lane == Lane.Left ? p.X - 146 : p.X + 64;
                 Rectangle badge = new Rectangle((int)badgeX, (int)(p.Y - 19), 82, 38);
-                Color badgeBorder = showingResult ? ringColor : (selected ? CoastalTheme.BrassBright : CoastalTheme.BrassGold);
+                Color badgeBorder = showingResult ? ringColor : (selected ? CoastalTheme.BrassBright : (hovered ? CoastalTheme.SeafoamLight : CoastalTheme.BrassGold));
                 CoastalTheme.DrawSubCard(g, badge, CoastalTheme.WoodShadow, CoastalTheme.WoodOutline, badgeBorder);
 
                 RectangleF keyTop = new RectangleF(badge.X + 2, badge.Y + 2, badge.Width - 4, 21);
@@ -630,13 +884,36 @@ namespace FishermansMemory.UI
             bool compact = r.Width < 760 || r.Height < 42;
             CoastalTheme.DrawPixelBox(g, r, CoastalTheme.OceanDeep, CoastalTheme.WoodOutline, CoastalTheme.OceanBorder, 2);
 
+            int textRightLimit = r.Right - 10;
+            if (ConfirmActionEnabled && !playing && !dead)
+            {
+                int btnW = compact ? 154 : 210;
+                int btnH = Math.Max(22, r.Height - 8);
+                int pressOff = confirmPressed ? 1 : 0;
+                confirmButtonRect = new Rectangle(r.Right - btnW - 6, r.Y + 4 + pressOff, btnW, btnH - pressOff);
+                Color cBg = confirmHovered ? Color.FromArgb(214, 142, 42) : Color.FromArgb(186, 118, 28);
+                Color cBorder = confirmHovered ? CoastalTheme.BrassBright : CoastalTheme.BrassGold;
+                CoastalTheme.DrawSubCard(g, confirmButtonRect, cBg, CoastalTheme.WoodOutline, cBorder);
+                var btnFont = CoastalTheme.TitleFont(compact ? 8f : 9.5f, FontStyle.Bold);
+                string btnLbl = compact ? "✓ CONFIRMAR" : "✓ CONFIRMAR [ENTER]";
+                TextRenderer.DrawText(g, btnLbl, btnFont, confirmButtonRect, Color.FromArgb(255, 250, 235),
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                textRightLimit = confirmButtonRect.X - 8;
+            }
+            else
+            {
+                confirmButtonRect = Rectangle.Empty;
+            }
+
             Color stAccent = CoastalTheme.Seafoam;
             NauticalIcon stIcon = NauticalIcon.Compass;
             string stText = !string.IsNullOrEmpty(CustomFooterPrompt)
                 ? CustomFooterPrompt
-                : "Use WASD ou as Setas para escolher a posição segura.";
+                : (centerLaneAllowed
+                    ? "Escolha A (Esq.), S (Centro) ou D (Dir.) e confirme com Enter."
+                    : "Escolha A (Esquerda) ou D (Direita) e confirme com Enter.");
 
-            if (attack != null)
+            if (attack != null && (playing || !ConfirmActionEnabled))
             {
                 string atkPrefix = attackNumber > 0 ? ("Ataque #" + attackNumber + ": ") : "";
                 if (attack.Correct && attack.Combo)
@@ -666,7 +943,7 @@ namespace FishermansMemory.UI
             var bodyFont = CoastalTheme.BodyFont(compact ? 8.5f : 10f, FontStyle.Bold);
             int tx = (int)iconRect.Right + 8;
             TextRenderer.DrawText(g, stText, bodyFont,
-                new Rectangle(tx, r.Y + 2, Math.Max(40, r.Right - tx - 10), r.Height - 4),
+                new Rectangle(tx, r.Y + 2, Math.Max(40, textRightLimit - tx), r.Height - 4),
                 stAccent, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 

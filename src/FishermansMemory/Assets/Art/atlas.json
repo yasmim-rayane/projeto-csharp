@@ -91,6 +91,36 @@
   ],
   "scene.2": [
     {
+      "Sheet": "beach-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "scene.3": [
+    {
+      "Sheet": "rocks-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "scene.4": [
+    {
+      "Sheet": "rocks-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 1536,
+      "Height": 1024,
+      "Transparent": false
+    }
+  ],
+  "scene.5": [
+    {
       "Sheet": "boss-clean-hd.png",
       "X": 0,
       "Y": 0,
@@ -120,6 +150,36 @@
     }
   ],
   "enemy.2": [
+    {
+      "Sheet": "pelican-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.3": [
+    {
+      "Sheet": "stingray-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.4": [
+    {
+      "Sheet": "moray-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.5": [
     {
       "Sheet": "leviathan-sprite.png",
       "X": 0,
@@ -203,6 +263,114 @@
   ],
   "enemy.2.idle": [
     {
+      "Sheet": "pelican-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    },
+    {
+      "Sheet": "pelican-idle2-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.2.attack": [
+    {
+      "Sheet": "pelican-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    },
+    {
+      "Sheet": "pelican-attack-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.3.idle": [
+    {
+      "Sheet": "stingray-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    },
+    {
+      "Sheet": "stingray-idle2-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.3.attack": [
+    {
+      "Sheet": "stingray-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    },
+    {
+      "Sheet": "stingray-attack-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.4.idle": [
+    {
+      "Sheet": "moray-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    },
+    {
+      "Sheet": "moray-idle2-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.4.attack": [
+    {
+      "Sheet": "moray-idle-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    },
+    {
+      "Sheet": "moray-attack-hd.png",
+      "X": 0,
+      "Y": 0,
+      "Width": 320,
+      "Height": 300,
+      "Transparent": false
+    }
+  ],
+  "enemy.5.idle": [
+    {
       "Sheet": "leviathan-sprite.png",
       "X": 0,
       "Y": 0,
@@ -211,7 +379,7 @@
       "Transparent": false
     }
   ],
-  "enemy.2.attack": [
+  "enemy.5.attack": [
     {
       "Sheet": "leviathan-sprite.png",
       "X": 0,
